@@ -124,17 +124,10 @@ namespace ConsoleServices.Tests
             get
             {
                 var message1 = JsonConvert.SerializeObject(new { MessagePart = "Hello my name is, ", UserInput = "Neil" }).ToString();
-                //var message2 = JsonConvert.SerializeObject(new { MessagePart = "Hello, I am , ", UserInput = "Neil" }).ToString();
-                //var message3 = JsonConvert.SerializeObject(new { MessagePart = "  ", UserInput = "      " }).ToString();
-                //var message4 = JsonConvert.SerializeObject(new { MessagePart = "This is my name: ", UserInput = "" }).ToString();
-                //var message5 = JsonConvert.SerializeObject(new { MessagePart = "Hello my name is, ", UserInput = "Peter George Johnson  " }).ToString();
+
                 return new[]
                 {
-                     new object[] { message1},
-                     //new object[] { message2},
-                     //new object[] { message3},
-                     //new object[] { message4},
-                     //new object[] { message5}
+                     new object[] { message1}
                 };
             }
         }
