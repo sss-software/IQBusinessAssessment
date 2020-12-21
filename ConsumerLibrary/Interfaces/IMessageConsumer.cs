@@ -6,6 +6,6 @@ namespace ConsumerLibrary.Interfaces
 {
     public interface IMessageConsumer
     {
-        void ConsumeMessage();
+        void ConsumeMessage(Dictionary<string, string> settingsDictionary);
     }
 }

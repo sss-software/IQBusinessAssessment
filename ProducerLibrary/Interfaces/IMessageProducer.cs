@@ -6,6 +6,6 @@ namespace ProducerLibrary.Interfaces
 {
     public interface IMessageProducer
     {
-        void SendMessage(string input);
+        void SendMessage(string input, Dictionary<string, string> settingsDictionary);
     }
 }

@@ -5,53 +5,41 @@ using RabbitMQ.Client;
 using RabbitMQ.Client.Exceptions;
 using System;
 using System.Collections.Generic;
+using System.Configuration;
 using System.Text;
+using System.Text.RegularExpressions;
 
 namespace ProducerLibrary.Services
 {
     public class MessageProducer : IMessageProducer
     {
         private readonly ILogger logger;
+        private Dictionary<string, string> settings;
 
         public MessageProducer(ILogger<MessageProducer> logger)
         {
             this.logger = logger;
         }
 
-        public void SendMessage(string input)
+        public string BuildMessage(string name)
         {
-            logger.LogInformation("Send message started . . .");
-            if (IsValidInput(input))
-            {
-                Dictionary<string, string> config = GetConfigurationDictionary();
-                using IConnection connection = GetConnection(config["HostName"], config["UserName"], config["Password"]);
-                {
-                    if (connection != null)
-                    {
-                        using IModel channel = GetChannel(connection, config["QueueName"]);
-                        {
-                            if (channel != null)
-                            {
-                                string message = BuildMessage(input);
-                                byte[] messageBody = GetMessageByteArray(message);
-                                PublishMessage(channel, config["QueueName"], messageBody);
-                            }
-                        }
-                    }
-                }
-                logger.LogInformation("Send message completed.");
-            }
-            else
-            {
-                string error = "Input is invalid";
-                Console.WriteLine(error);
-                logger.LogError(error);
-            }
+            object messageObject = new { MessagePart = settings["ProducerMessagePrefix"], UserInput = name };
+            return JsonConvert.SerializeObject(messageObject);
         }
 
-        private byte[] GetMessageByteArray(string message)
+        public IModel GetChannel(IConnection connection, string queueName)
         {
-            return Encoding.UTF8.GetBytes(message);
+            try
+            {
+                var channel = connection.CreateModel();
+                channel.QueueDeclare(queue: queueName, durable: false, exclusive: false, autoDelete: false, arguments: null);
+                return channel;
+            }
+            catch (Exception e)
+            {
+                logger.LogCritical(e, e.Message, new object[] { });
+                throw;
+            }
         }
 
         public IConnection GetConnection(string hostName, string userName, string password)
@@ -80,19 +68,11 @@ namespace ProducerLibrary.Services
             }
         }
 
-        public IModel GetChannel(IConnection connection, string queueName)
+        public bool IsValidInput(string input)
         {
-            try
-            {
-                var channel = connection.CreateModel();
-                channel.QueueDeclare(queue: queueName, durable: false, exclusive: false, autoDelete: false, arguments: null);
-                return channel;
-            }
-            catch (Exception e)
-            {
-                logger.LogCritical(e, e.Message, new object[] { });
-                throw;
-            }
+            string pattern = @"[a-zA-Z]";
+            var match = Regex.Match(input, pattern, RegexOptions.IgnoreCase);
+            return !string.IsNullOrEmpty(input) && match.Success;
         }
 
         public void PublishMessage(IModel channel, string queueName, byte[] messageBody)
@@ -111,25 +91,41 @@ namespace ProducerLibrary.Services
             }
         }
 
-        private Dictionary<string, string> GetConfigurationDictionary()
+        public void SendMessage(string input, Dictionary<string, string> settings)
         {
-            Dictionary<string, string> result = new Dictionary<string, string>();
-            result["HostName"] = "localhost";
-            result["UserName"] = "guest";
-            result["Password"] = "guest";
-            result["QueueName"] = "iq-assessment";
-            return result;
+            logger.LogInformation("Sending message...");
+            this.settings = settings;
+            if (IsValidInput(input))
+            {
+                using IConnection connection = GetConnection(settings["HostName"], settings["UserName"], settings["Password"]);
+                {
+                    if (connection != null)
+                    {
+                        using IModel channel = GetChannel(connection, settings["QueueName"]);
+                        {
+                            if (channel != null)
+                            {
+                                string message = BuildMessage(input);
+                                byte[] messageBody = GetMessageByteArray(message);
+                                logger.LogInformation("Message to be send:" + message);
+                                PublishMessage(channel, settings["QueueName"], messageBody);
+                            }
+                        }
+                    }
+                }
+                logger.LogInformation("Send message completed.");
+            }
+            else
+            {
+                string error = "Input is invalid";
+                Console.WriteLine(error);
+                logger.LogError(error);
+            }
         }
 
-        private string BuildMessage(string name)
+        private byte[] GetMessageByteArray(string message)
         {
-            var message = new { MessagePart = "Hello my name is, ", UserInput = name };
-            return JsonConvert.SerializeObject(message);
-        }
-
-        private bool IsValidInput(string input)
-        {
-            return !string.IsNullOrEmpty(input);
+            return Encoding.UTF8.GetBytes(message);
         }
     }
 }

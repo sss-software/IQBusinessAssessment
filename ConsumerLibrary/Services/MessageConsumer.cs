@@ -13,25 +13,44 @@ namespace ConsumerLibrary.Services
     public class MessageConsumer : IMessageConsumer
     {
         private readonly ILogger logger;
+        private Dictionary<string, string> settings;
+
         public MessageConsumer(ILogger<MessageConsumer> logger)
         {
             this.logger = logger;
         }
-        public void ConsumeMessage()
+
+        public Dictionary<string, string> SettingsDictionary
         {
-            logger.LogInformation("Consume message started . . .");
+            get
+            {
+                return settings;
+            }
+            set
+            {
+                settings = value;
+            }
+        }
+
+        public string BuildResponseMessage(string messagePrefix, string name)
+        {
+            return string.Format(messagePrefix, name);
+        }
+
+        public void ConsumeMessage(Dictionary<string, string> settings)
+        {
+            this.settings = settings;
             try
             {
-                Dictionary<string, string> config = GetConfigurationDictionary();
-                using IConnection connection = GetConnection(config["HostName"], config["UserName"], config["Password"]);
+                using IConnection connection = GetConnection(settings["HostName"], settings["UserName"], settings["Password"]);
                 {
                     if (connection != null)
                     {
-                        using IModel channel = GetChannel(connection, config["QueueName"]);
+                        using IModel channel = GetChannel(connection, settings["QueueName"]);
                         {
                             if (channel != null)
                             {
-                                Console.WriteLine("Waiting for messages . . .");
+                                Console.WriteLine("Waiting for messages . . . Press[ENTER] to exit.");
                                 var consumer = new EventingBasicConsumer(channel);
                                 consumer.Received += (model, e) =>
                                 {
@@ -40,35 +59,70 @@ namespace ConsumerLibrary.Services
                                     string name = string.Empty;
                                     if (IsValidMessage(message, out name))
                                     {
-                                        string response = BuildMessage(name);
+                                        string response = BuildResponseMessage(settings["ConsumerMessagePrefix"], name);
                                         logger.LogInformation(response);
                                         Console.WriteLine(response);
                                     }
                                     else
                                     {
                                         string error = "Message validation failed.";
-                                        Console.WriteLine(error);
                                         logger.LogError(error);
+                                        Console.WriteLine(error);
                                     }
                                 };
+                                channel.BasicConsume(queue: settings["QueueName"], autoAck: true, consumer: consumer);
+                                logger.LogInformation("Consumer responded.");
+                                Console.WriteLine("RESPONSES: ");
+                                Console.ReadLine();
                             }
                         }
                     }
                 }
-                logger.LogInformation("Consume message completed.");
             }
-            catch(Exception e)
+            catch (Exception e)
             {
                 logger.LogCritical(e, e.Message, new object[] { });
             }
         }
 
-        public string GetMessageString(byte[] bytes)
+        public bool IsValidMessage(string message, out string userInput)
         {
-            return Encoding.UTF8.GetString(bytes);
+            userInput = string.Empty;
+            try
+            {
+                string validator = settings["ProducerMessagePrefix"];
+                var definition = new { MessagePart = "", UserInput = "" };
+                var messageObj = JsonConvert.DeserializeAnonymousType(message, definition);
+                bool validation = ((messageObj != null) &&
+                                    (!string.IsNullOrEmpty(messageObj.MessagePart)) &&
+                                    (messageObj.MessagePart.StartsWith(validator)) &&
+                                    (!string.IsNullOrEmpty(messageObj.UserInput)));
+                userInput = messageObj.UserInput;
+                return validation;
+            }
+            catch (Exception e)
+            {
+                logger.LogCritical(e, e.Message, new object[] { });
+                return false;
+            }
         }
 
-        public IConnection GetConnection(string hostName, string userName, string password)
+        private IModel GetChannel(IConnection connection, string queueName)
+        {
+            try
+            {
+                var channel = connection.CreateModel();
+                channel.QueueDeclare(queue: queueName, durable: false, exclusive: false, autoDelete: false, arguments: null);
+                return channel;
+            }
+            catch (Exception e)
+            {
+                logger.LogCritical(e, e.Message, new object[] { });
+                throw;
+            }
+        }
+
+        private IConnection GetConnection(string hostName, string userName, string password)
         {
             IConnection connection = null;
             try
@@ -94,49 +148,9 @@ namespace ConsumerLibrary.Services
             }
         }
 
-        public IModel GetChannel(IConnection connection, string queueName)
+        private string GetMessageString(byte[] bytes)
         {
-            try
-            {
-                var channel = connection.CreateModel();
-                channel.QueueDeclare(queue: queueName, durable: false, exclusive: false, autoDelete: false, arguments: null);
-                return channel;
-            }
-            catch (Exception e)
-            {
-                logger.LogCritical(e, e.Message, new object[] { });
-                throw;
-            }
-
-        }
-
-        private Dictionary<string, string> GetConfigurationDictionary()
-        {
-            Dictionary<string, string> result = new Dictionary<string, string>
-            {
-                ["HostName"] = "localhost",
-                ["UserName"] = "guest",
-                ["Password"] = "guest",
-                ["QueueName"] = "iq-assessment"
-            };
-            return result;
-        }
-
-        private bool IsValidMessage(string message, out string userInput)
-        {
-            var definition = new { MessagePart = "", UserInput = "" };
-            var messageObj = JsonConvert.DeserializeAnonymousType(message, definition);
-            bool validation = ((messageObj != null) &&
-                                (!string.IsNullOrEmpty(messageObj.MessagePart)) &&
-                                (messageObj.MessagePart.StartsWith("Hello my name is,")) &&
-                                (!string.IsNullOrEmpty(messageObj.UserInput)));
-            userInput = messageObj.UserInput;
-            return validation;
-        }
-
-        private string BuildMessage(string name)
-        {
-            return string.Format("Hello {0}, I am your father!", name);
+            return Encoding.UTF8.GetString(bytes);
         }
     }
 }

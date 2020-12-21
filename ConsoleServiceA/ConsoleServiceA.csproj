@@ -16,5 +16,4 @@
     <ProjectReference Include="..\CommonLibrary\CommonLibrary.csproj" />
     <ProjectReference Include="..\ProducerLibrary\ProducerLibrary.csproj" />
   </ItemGroup>
-
 </Project>
