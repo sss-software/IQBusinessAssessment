@@ -13,12 +13,14 @@ namespace ConsoleServices.Tests
     public class MessageConsumerTest
     {
         private readonly Mock<ILogger<MessageConsumer>> mockLogger = new Mock<ILogger<MessageConsumer>>();
+        private readonly string producerMessagePrefix = "Hello my name is,";
 
         [Theory, MemberData(nameof(MessageTestData))]
         public void IsValidMessageTest(string message, bool expected)
         {
             var consumer = new MessageConsumer(mockLogger.Object);
-
+            consumer.SettingsDictionary = new Dictionary<string, string>();
+            consumer.SettingsDictionary["ProducerMessagePrefix"] = producerMessagePrefix;
             bool actual = consumer.IsValidMessage(message.ToString(), out string userInput);
 
             Assert.Equal(expected, actual);
